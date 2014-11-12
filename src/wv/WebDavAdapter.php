@@ -16,24 +16,24 @@ use Sabre\DAV\Client;
 use Sabre\DAV\Exception\NotFound;
 
 class WebDavAdapter implements Adapter {
-	protected $client;
+	protected $clientFactory;
 	protected $directory;
 
 	/**
 	 * Constructor
 	 *
-	 * @param Client $client
-	 * @param string $directory
+	 * @param Closure $clientFactory
+	 * @param string  $directory
 	 */
-	public function __construct(Client $client, $directory) {
-		$this->client    = $client;
-		$this->directory = (string) $directory;
+	public function __construct($clientFactory, $directory) {
+		$this->clientFactory = $clientFactory;
+		$this->directory     = (string) $directory;
 	}
 
 	public function read($key) {
 		$this->ensureDirectoryExists($this->directory, false);
 
-		$response = $this->client->request('GET', $this->computePath($key));
+		$response = $this->getClient()->request('GET', $this->computePath($key));
 
 		return $response['body'];
 	}
@@ -46,7 +46,7 @@ class WebDavAdapter implements Adapter {
 
 		try {
 			$this->ensureDirectoryExists($directory, true);
-			$this->client->request('PUT', $path, $content);
+			$this->getClient()->request('PUT', $path, $content);
 		}
 		catch (\Exception $e) {
 			return false;
@@ -64,7 +64,7 @@ class WebDavAdapter implements Adapter {
 		$this->ensureDirectoryExists(dirname($targetPath), true);
 
 		try {
-			$this->client->request('MOVE', $sourcePath, null, array(
+			$this->getClient()->request('MOVE', $sourcePath, null, array(
 				'Overwrite'   => 'F',
 				'Destination' => $targetPath
 			));
@@ -80,8 +80,14 @@ class WebDavAdapter implements Adapter {
 		$this->ensureDirectoryExists($this->directory, false);
 
 		try {
-			$file = $this->computePath($key);
-			$this->client->request('HEAD', $file);
+			$file     = $this->computePath($key);
+			$response = $this->getClient()->request('HEAD', $file);
+
+			// sometimes, SabreDAV will not throw up for some bizarre reason
+			if ($response['statusCode'] >= 400) {
+				throw new NotFound();
+			}
+
 			return true;
 		}
 		catch (NotFound $e) {
@@ -288,5 +294,11 @@ class WebDavAdapter implements Adapter {
 
 	private function computePath($key) {
 		return rtrim($this->directory, '/') . '/' . $key;
+	}
+
+	private function getClient() {
+		$factory = $this->clientFactory;
+
+		return $factory();
 	}
 }
