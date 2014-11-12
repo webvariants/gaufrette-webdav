@@ -142,7 +142,7 @@ class WebDavAdapter implements Adapter {
 			$path     = $this->computePath($key);
 			$response = $this->getClient()->request('DELETE', $path);
 
-			if ($response['statusCode'] !== 200) {
+			if ($response['statusCode'] >= 400) {
 				throw new \Exception();
 			}
 
